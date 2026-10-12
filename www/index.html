@@ -2,14 +2,8 @@
 <html lang="th">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#4fc3f7">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="เมืองออมเงิน">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icon-192.png">
-<link rel="icon" href="icon-192.png">
 <title>เมืองออมเงิน</title>
 <style>
 :root{
@@ -160,6 +154,8 @@ label{display:block;font-weight:800;margin:10px 0 4px;font-size:.9rem}
 #toast{position:fixed;left:50%;top:calc(90px + env(safe-area-inset-top));transform:translateX(-50%) translateY(-20px);background:var(--ink);color:#fff;
   padding:10px 18px;border-radius:24px;font-weight:800;z-index:50;opacity:0;pointer-events:none;transition:.25s;max-width:92%;text-align:center}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#job{position:fixed;left:10px;right:10px;bottom:calc(80px + env(safe-area-inset-bottom));z-index:30;background:var(--ink);color:#fff;border-radius:16px;padding:10px 14px;font-weight:800;font-size:.9rem;text-align:center;display:none;box-shadow:0 4px 0 rgba(0,0,0,.25)}
+#job.show{display:block}
 .file{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center}
 .file input{position:absolute;inset:0;opacity:0;width:100%;height:100%}
 </style>
@@ -178,6 +174,7 @@ label{display:block;font-weight:800;margin:10px 0 4px;font-size:.9rem}
   <button data-act="tab" data-v="badge"><i>🏅</i>เหรียญ</button>
 </nav>
 <div id="ov" hidden></div>
+<div id="job"></div>
 <div id="toast"></div>
 
 <script>
@@ -186,7 +183,7 @@ label{display:block;font-weight:800;margin:10px 0 4px;font-size:.9rem}
 
 /* ================= ข้อมูล ================= */
 var KEY='citysave_v1';
-var DEF={tx:[],budget:15000,name:'เมืองของฉัน',xp:0,claimed:{},badges:{},xpDay:{},best:0,claimedCount:0,lv:1,stage:1};
+var DEF={tx:[],budget:15000,name:'เมืองของฉัน',xp:0,claimed:{},badges:{},xpDay:{},best:0,claimedCount:0,lv:1,stage:1,myName:'',galleryAuto:false,lastGal:0};
 function load(){
   try{var d=JSON.parse(localStorage.getItem(KEY));if(d&&Array.isArray(d.tx)){for(var k in DEF)if(!(k in d))d[k]=JSON.parse(JSON.stringify(DEF[k]));return d;}}catch(e){}
   return JSON.parse(JSON.stringify(DEF));
@@ -377,6 +374,8 @@ function cityHtml(){
   h+='<div class="card"><b>🎯 งบเดือนนี้</b> <span class="hint">฿'+fmt(m.out)+' / ฿'+fmt(db.budget)+'</span><div class="bar '+(pct>100?'over':pct>80?'warnb':'')+'" style="margin-top:6px"><i style="width:'+Math.min(100,pct)+'%"></i></div></div>';
   if(nx)h+='<div class="card"><b>'+nx.e+' ไปสู่ '+esc(nx.name)+'</b> <span class="hint">ออมให้ถึง ฿'+fmt(nx.min)+'</span><div class="bar" style="margin-top:6px"><i style="width:'+Math.max(0,Math.min(100,(s-st.min)/(nx.min-st.min)*100))+'%"></i></div></div>';
   else h+='<div class="card center"><b>🏛️ เมืองของคุณเป็นนครหลวงแล้ว!</b></div>';
+  h+='<div class="card"><b>🧾 สแกนสลิปอัตโนมัติ</b><div class="hint" style="margin:4px 0 8px">แชร์รูปสลิปจากแอปธนาคารมาที่แอปนี้ได้เลย หรือเลือกรูปสลิปหลายใบพร้อมกัน แอปอ่านยอด วันที่ และเงินเข้า/ออกให้เอง</div>'+
+     '<label class="btn sun file" style="margin:0">📥 นำเข้าสลิปหลายรูป<input type="file" id="multi" accept="image/*" multiple></label></div>';
   return h+'<button class="btn go" data-act="add" style="margin:6px 0 14px">＋ จดรายการวันนี้</button>';
 }
 function bookHtml(){
@@ -390,7 +389,7 @@ function bookHtml(){
   list.forEach(function(e){
     var c=catOf(e.type,e.cat),sign=e.type==='income'?'+':e.type==='expense'?'−':(e.cat==='withdraw'?'+':'🐷');
     var cls=e.type==='income'||e.cat==='withdraw'?'pos':e.type==='expense'?'neg':'';
-    h+='<div class="it"><div class="ic">'+c[1]+'</div><div class="t"><b>'+esc(e.note||c[2])+(c[3]?'<span class="tag">ฟุ่มเฟือย</span>':'')+'</b><small>'+c[2]+' · '+(month?thDate(e.date):TYPE_TH[e.type])+'</small></div>'+
+    h+='<div class="it"><div class="ic">'+c[1]+'</div><div class="t"><b>'+esc(e.note||c[2])+(c[3]?'<span class="tag">ฟุ่มเฟือย</span>':'')+(e.auto?'<span class="tag" style="background:var(--purple)">🤖 สลิป</span>':'')+'</b><small>'+c[2]+' · '+(month?thDate(e.date):TYPE_TH[e.type])+'</small></div>'+
        '<div class="a '+cls+'">'+sign+fmt(e.amt)+'</div><button class="x" data-act="del" data-v="'+e.id+'" aria-label="ลบ">🗑️</button></div>';
   });
   return h;
@@ -423,13 +422,230 @@ function render(){
   var imp=$('imp');if(imp)imp.onchange=importFile;
 }
 
+/* ================= เชื่อมต่อระบบแอป (Android) ================= */
+var CAP=window.Capacitor||null;
+var NATIVE=!!(CAP&&CAP.isNativePlatform&&CAP.isNativePlatform());
+function plug(n){try{return CAP.registerPlugin(n);}catch(e){return null;}}
+var Inbox=NATIVE?plug('SlipInbox'):null,Fs=NATIVE?plug('Filesystem'):null,Sh=NATIVE?plug('Share'):null;
+
+/* ================= อ่านสลิป (OCR ออฟไลน์ในเครื่อง) ================= */
+function loadOcr(){
+  if(window.Tesseract)return Promise.resolve();
+  return new Promise(function(res,rej){
+    var sc=document.createElement('script');sc.src='ocr/tesseract.min.js';sc.onload=res;sc.onerror=function(){rej(new Error('load'));};document.head.appendChild(sc);
+  });
+}
+var worker=null,wLog=null;
+function getWorker(){
+  if(worker)return worker;
+  var base=new URL('ocr/',location.href).href;
+  worker=loadOcr().then(function(){
+    return Tesseract.createWorker(['tha','eng'],1,{workerPath:base+'worker.min.js',corePath:base+'core',langPath:base+'lang',gzip:true,workerBlobURL:false,
+      logger:function(m){if(wLog)wLog(m);}});
+  }).catch(function(e){worker=null;throw e;});
+  return worker;
+}
+function recognize(blob,onProg){
+  wLog=onProg||null;
+  return getWorker().then(function(w){return prepImage(blob).then(function(cv){return w.recognize(cv);});});
+}
+function prepImage(file){ // ย่อ/ขยาย + ขาวดำเพิ่มคอนทราสต์ ให้อ่านง่ายขึ้น
+  return new Promise(function(res,rej){
+    var url=URL.createObjectURL(file),img=new Image();
+    img.onload=function(){
+      var w=img.naturalWidth,h=img.naturalHeight,k=1800/Math.max(w,h);
+      if(w<1000)k=Math.max(k,1000/w);
+      k=Math.min(k,2.5);
+      var c=document.createElement('canvas');c.width=Math.round(w*k);c.height=Math.round(h*k);
+      var x=c.getContext('2d');x.drawImage(img,0,0,c.width,c.height);
+      try{
+        var d=x.getImageData(0,0,c.width,c.height),p=d.data;
+        for(var i=0;i<p.length;i+=4){var g=p[i]*.3+p[i+1]*.59+p[i+2]*.11;g=Math.max(0,Math.min(255,(g-128)*1.35+128));p[i]=p[i+1]=p[i+2]=g;}
+        x.putImageData(d,0,0);
+      }catch(e){}
+      URL.revokeObjectURL(url);res(c);
+    };
+    img.onerror=function(){URL.revokeObjectURL(url);rej(new Error('img'));};
+    img.src=url;
+  });
+}
+var MONTHS=[['มกราคม','ม.ค','jan'],['กุมภาพันธ์','ก.พ','feb'],['มีนาคม','มี.ค','mar'],['เมษายน','เม.ย','apr'],['พฤษภาคม','พ.ค','may'],['มิถุนายน','มิ.ย','jun'],
+  ['กรกฎาคม','ก.ค','jul'],['สิงหาคม','ส.ค','aug'],['กันยายน','ก.ย','sep'],['ตุลาคม','ต.ค','oct'],['พฤศจิกายน','พ.ย','nov'],['ธันวาคม','ธ.ค','dec']];
+function monthOf(tok){
+  tok=tok.toLowerCase().replace(/[\s.]/g,'');if(tok.length<2)return 0;
+  for(var i=0;i<12;i++){var m=MONTHS[i];
+    if(tok===m[0]||tok===m[1].replace(/\./g,'')||tok.indexOf(m[2])===0)return i+1;}
+  return 0;
+}
+function fixYear(y){ // รองรับ พ.ศ. 4 หลัก/2 หลัก และ ค.ศ.
+  if(y>=2400)return y-543;
+  if(y>=1000)return y;
+  var ce=2000+y,be=1957+y,cur=new Date().getFullYear();
+  return Math.abs(be-cur)<=Math.abs(ce-cur)?be:ce;
+}
+function mkDate(d,m,y){
+  y=fixYear(y);var dt=new Date(y,m-1,d);
+  if(dt.getFullYear()!==y||dt.getMonth()!==m-1||dt.getDate()!==d)return null;
+  var s=ymd(dt);return s>ymd(new Date())?null:s;
+}
+function normName(s){return String(s||'').replace(/(นาย|นางสาว|นาง|น\.ส\.|mr\.?|mrs\.?|miss|ms\.?)/ig,'').replace(/[^฀-๿a-z0-9]/ig,'').toLowerCase();}
+function sameName(a,b){a=normName(a);b=normName(b);return a.length>=3&&b.length>=3&&(a.indexOf(b)>=0||b.indexOf(a)>=0);}
+var BANKKW=/โอนเงินสำเร็จ|จ่ายเงินสำเร็จ|ทำรายการสำเร็จ|โอนเงิน|รับเงิน|พร้อมเพย์|promptpay|กสิกร|ไทยพาณิชย์|กรุงไทย|กรุงเทพ|ทหารไทย|ธนชาต|ttb|กรุงศรี|ออมสิน|ธ\.?ก\.?ส|scb|kbank|k\s?plus|krungthai|bualuang|uob|cimb|lh\s?bank|slip|ธนาคาร|transfer/i;
+var CATGUESS=[
+  [/7-?eleven|เซเว่น|โลตัส|lotus|บิ๊กซี|big\s?c|แม็คโคร|makro|ท็อปส์|tops|ร้านค้า/i,'stuff'],
+  [/ร้านอาหาร|ข้าว|ก๋วยเตี๋ยว|ส้มตำ|คาเฟ่|cafe|coffee|กาแฟ|อเมซอน|amazon|starbucks|kfc|mcdonald|pizza|หมูกระทะ|ชาบู|foodpanda|lineman|grabfood/i,'food'],
+  [/grab|bolt|bts|mrt|ทางด่วน|ปตท|ptt|shell|เชลล์|บางจาก|bangchak|น้ำมัน|แท็กซี่|taxi|รถไฟ|สายการบิน|airasia|nok\s?air/i,'trip'],
+  [/การไฟฟ้า|ประปา|ค่าไฟ|ค่าน้ำ|ais|true|ทรู|dtac|ดีแทค|ค่าเช่า|คอนโด|หอพัก|3bb|nt\b/i,'home'],
+  [/shopee|lazada|ช้อปปี้|ลาซาด้า|central|เซ็นทรัล|uniqlo|zara|h&m/i,'shop'],
+  [/โรงพยาบาล|คลินิก|ร้านขายยา|เภสัช|ฟาร์มา|pharmacy|watsons|boots/i,'health'],
+  [/โรงเรียน|มหาวิทยาลัย|ค่าเทอม|คอร์ส|หนังสือ|ศึกษา/i,'study'],
+  [/netflix|youtube|spotify|steam|เกม|garena|roblox|โรงหนัง|major|sf\s?cinema/i,'fun']
+];
+function parseSlip(raw){
+  var t=raw.replace(/([฀-๿])[ \t]+(?=[฀-๿])/g,'$1').replace(/[|]/g,' ').replace(/\u0E4D\u0E32/g,'\u0E33');
+  var lines=t.split(/\n/).map(function(l){return l.trim();}).filter(Boolean),r={};
+  // จำนวนเงิน
+  var dec=/\d{1,3}(?:,\d{3})+\.\d{2}|\d+\.\d{2}/g,fee=/ค่าธรรมเนียม|ค่าบริการ|fee/i,key=/จำนวน|amount|ยอด|total|เงินโอน|เงินที่ได้รับ/i;
+  function nums(l){return (l.match(dec)||[]).map(num);}
+  var amt=0;
+  for(var i=0;i<lines.length&&!amt;i++){
+    if(key.test(lines[i])&&!fee.test(lines[i])){var n=nums(lines[i]).concat(nums(lines[i+1]||''));if(n.length)amt=n[0];}
+  }
+  if(!amt){
+    for(var j=0;j<lines.length&&!amt;j++){
+      var m=lines[j].match(/(\d[\d,]*(?:\.\d{1,2})?)\s*(?:บาท|THB|baht)/i);
+      if(m&&!fee.test(lines[j])&&num(m[1])>0)amt=num(m[1]);
+    }
+  }
+  if(!amt){lines.forEach(function(l){if(!fee.test(l))nums(l).forEach(function(n){if(n>amt)amt=n;});});}
+  if(amt>0)r.amt=amt;
+  // วันที่
+  var dm,ds=null;
+  var re1=/(\d{1,2})\s*([^\d\s]{2,12}?\.?)\s*(\d{2,4})/g;
+  while(!ds&&(dm=re1.exec(t))){var mo=monthOf(dm[2]);if(mo)ds=mkDate(+dm[1],mo,+dm[3]);}
+  if(!ds){var re2=/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/g;
+    while(!ds&&(dm=re2.exec(t)))ds=mkDate(+dm[1],+dm[2],+dm[3]);}
+  if(ds)r.date=ds;
+  // เลขอ้างอิง (ใช้กันบันทึกซ้ำ)
+  var rm=t.match(/(?:รหัสอ้างอิง|เลขที่รายการ|หมายเลขอ้างอิง|รหัสรายการ|เลขอ้างอิง|ref(?:erence)?\.?(?:\s*no\.?)?|transaction\s*id)\s*[:：]?\s*\n?\s*([A-Za-z0-9]{8,})/i);
+  if(rm)r.ref=rm[1].toUpperCase();
+  // ชื่อผู้โอน/ผู้รับ
+  function after(re){
+    for(var k=0;k<lines.length;k++){var w=lines[k].match(re);
+      if(w){var nm=(w[1]||lines[k+1]||'').replace(/[^฀-๿a-zA-Z0-9 .\-]/g,' ').replace(/\s+/g,' ').trim();if(nm.length>1)return nm.slice(0,40);}}
+    return '';
+  }
+  var fromN=after(/^(?:จาก|ผู้โอน|from\b)\s*[:：]?\s*(.*)$/i),toN=after(/^(?:ไปยัง|ถึง|ผู้รับ|to\b)\s*[:：]?\s*(.*)$/i);
+  // ประเภท: เทียบกับชื่อของฉัน ถ้าไม่ได้ตั้งไว้ใช้ข้อความในสลิป
+  var type=/รับเงิน|เงินเข้า|ได้รับเงิน|received|money in|เงินโอนเข้า/i.test(t)&&!/โอนเงินสำเร็จ|จ่ายเงินสำเร็จ/.test(t)?'income':'expense';
+  if(db.myName){
+    if(toN&&sameName(toN,db.myName)&&!(fromN&&sameName(fromN,db.myName)))type='income';
+    else if(fromN&&sameName(fromN,db.myName))type='expense';
+  }
+  r.type=type;
+  var other=type==='income'?fromN:toN;
+  if(other)r.note=other;
+  r.cat=type==='income'?'otherin':'otherout';
+  if(type==='expense'){var hay=(other||'')+' '+t;for(var g=0;g<CATGUESS.length;g++)if(CATGUESS[g][0].test(hay)){r.cat=CATGUESS[g][1];break;}}
+  r.isSlip=!!(r.amt&&(r.ref||(BANKKW.test(t)&&r.date)));
+  return r;
+}
+
+/* ===== สแกนในฟอร์ม (เลือกรูปเองแล้วตรวจก่อนบันทึก) ===== */
+function scanSlip(file){
+  var f=ui.form;if(!f||!file)return;
+  function st(m){f.scanMsg=m;var e=$('scanSt');if(e&&ui.form===f)e.textContent=m;}
+  st('⏳ กำลังอ่านสลิป... (ครั้งแรกอาจใช้เวลาสักครู่)');
+  recognize(file,function(m){if(m.status==='recognizing text')st('🔍 กำลังอ่านสลิป '+Math.round(m.progress*100)+'%');})
+  .then(function(res){
+    if(ui.form!==f)return;
+    var raw=(res.data&&res.data.text)||'',r=parseSlip(raw);
+    f.raw=raw.trim();
+    if(r.type){f.type=r.type;f.cat=r.cat;}
+    if(r.amt)f.amt=String(r.amt);
+    if(r.date)f.date=r.date;
+    if(r.note)f.note=r.note;
+    if(r.ref)f.slipKey=r.ref;
+    var miss=[];if(!r.amt)miss.push('จำนวนเงิน');if(!r.date)miss.push('วันที่');
+    f.scanMsg=miss.length?'⚠️ อ่านไม่เจอ: '+miss.join(', ')+' — กรอกเองได้เลย':'✔ อ่านสลิปแล้ว ตรวจสอบก่อนกดบันทึกนะ';
+    refreshForm();
+  }).catch(function(){
+    if(ui.form===f)st('❌ อ่านสลิปไม่ได้ ลองรูปที่ชัดขึ้น หรือกรอกเอง');
+  });
+}
+
+/* ===== สแกนอัตโนมัติ: สลิปที่แชร์เข้ามา + รูปใหม่ในแกลเลอรี + เลือกหลายรูป ===== */
+var busy=false;
+function job(msg){var e=$('job');if(!e)return;if(!msg){e.classList.remove('show');return;}e.textContent=msg;e.classList.add('show');}
+function b64Blob(b64){var bin=atob(b64),u=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return new Blob([u],{type:'image/jpeg'});}
+function readCache(name){return Fs.readFile({path:'slips/'+name,directory:'CACHE'}).then(function(r){return b64Blob(r.data);});}
+function dupKey(r){return r.ref||('d|'+r.date+'|'+r.type+'|'+r.amt);}
+function saveSlip(r){ // คืน true ถ้าบันทึกใหม่
+  var k=dupKey(r);
+  if(db.tx.some(function(e){return e.slipKey===k;}))return false;
+  db.tx.push({id:uid(),date:r.date||today,type:r.type,cat:r.cat,amt:r.amt,note:r.note||'',ts:Date.now(),auto:true,slipKey:k});
+  return true;
+}
+// providers: อาร์เรย์ของ Promise<Blob>; opts.review = เปิดฟอร์มให้ตรวจเมื่อไม่ใช่สลิปชัดเจน
+function processBatch(providers,label,opts){
+  opts=opts||{};
+  if(busy){toast('กำลังอ่านสลิปอยู่ รอสักครู่นะ');return Promise.resolve();}
+  busy=true;
+  var added=0,dup=0,skip=0,total=providers.length,lastRaw=null;
+  var chain=Promise.resolve();
+  providers.forEach(function(p,i){
+    chain=chain.then(function(){
+      job('🔍 '+label+' '+(i+1)+'/'+total+' ...');
+      return p.then(function(blob){
+        return recognize(blob,function(m){if(m.status==='recognizing text')job('🔍 '+label+' '+(i+1)+'/'+total+' · '+Math.round(m.progress*100)+'%');});
+      }).then(function(res){
+        var raw=(res.data&&res.data.text)||'',r=parseSlip(raw);
+        if(r.isSlip){if(saveSlip(r))added++;else dup++;}
+        else{skip++;if(opts.review&&r.amt)lastRaw={r:r,raw:raw};}
+      }).catch(function(){skip++;});
+    });
+  });
+  return chain.then(function(){
+    busy=false;job('');
+    if(Inbox)Inbox.cleanup().catch(function(){});
+    if(added){confetti();toast('🧾 บันทึกสลิปอัตโนมัติ '+added+' รายการ'+(dup?' (ซ้ำ '+dup+')':''));afterChange();}
+    else if(dup)toast('สลิปนี้บันทึกไว้แล้ว ('+dup+')');
+    else if(lastRaw){
+      openForm();var f=ui.form,r=lastRaw.r;
+      f.type=r.type;f.cat=r.cat;f.amt=String(r.amt);if(r.date)f.date=r.date;if(r.note)f.note=r.note;f.raw=lastRaw.raw.trim();
+      f.scanMsg='⚠️ ไม่แน่ใจว่าเป็นสลิป ตรวจสอบก่อนบันทึกนะ';refreshForm();
+    }
+    else if(total)toast('ไม่พบสลิปในรูป'+(total>1?'ที่เลือก':''));
+  });
+}
+function autoScan(){
+  if(!NATIVE||busy)return;
+  Inbox.takeShared().then(function(r){
+    var shared=r.files||[];
+    if(shared.length)return processBatch(shared.map(readCache),'อ่านสลิปที่แชร์',{review:true});
+    if(!db.galleryAuto)return;
+    return Inbox.hasGalleryAccess().then(function(p){
+      if(!p.granted)return;
+      var since=db.lastGal||Math.floor(Date.now()/1000)-86400;
+      return Inbox.scanGallery({sinceSec:since,limit:15}).then(function(g){
+        var files=g.files||[];
+        if(g.newest&&g.newest>db.lastGal){db.lastGal=g.newest;save();}
+        if(files.length)return processBatch(files.map(readCache),'สแกนสลิปใหม่');
+      });
+    });
+  }).catch(function(){busy=false;job('');});
+}
+
 /* ================= ฟอร์มเพิ่มรายการ ================= */
 function formHtml(){
   var f=ui.form,h='<div class="sh"><h2 style="margin-top:0">＋ เพิ่มรายการ</h2><div class="types">';
   ['income','expense','save'].forEach(function(t){h+='<button class="'+t+(f.type===t?' on':'')+'" data-act="ftype" data-v="'+t+'">'+({income:'⬆️ รายรับ',expense:'⬇️ รายจ่าย',save:'🐷 เงินออม'})[t]+'</button>';});
   h+='</div><div class="cats">';
   CATS[f.type].forEach(function(c){h+='<button class="'+(f.cat===c[0]?'on':'')+'" data-act="fcat" data-v="'+c[0]+'"><i>'+c[1]+'</i>'+c[2]+(c[3]?'<span class="tag">ฟุ่มเฟือย</span>':'')+'</button>';});
-  h+='</div><label>จำนวนเงิน (บาท)</label><input id="fAmt" class="inp amt" inputmode="decimal" placeholder="0" value="'+esc(f.amt)+'">'+
+  h+='</div><label class="btn sun file" style="margin:0 0 4px">📷 สแกนสลิปจากรูปภาพ<input type="file" id="scan" accept="image/*"></label>'+
+     '<div class="hint" id="scanSt">'+esc(f.scanMsg||'เลือกรูปสลิปโอนเงิน/รับเงิน แล้วแอปจะกรอกให้ (ตรวจสอบก่อนบันทึกด้วยนะ)')+'</div>'+
+     (f.raw?'<details class="hint"><summary>ข้อความที่อ่านได้</summary><pre style="white-space:pre-wrap;margin:4px 0">'+esc(f.raw)+'</pre></details>':'')+
+     '<label>จำนวนเงิน (บาท)</label><input id="fAmt" class="inp amt" inputmode="decimal" placeholder="0" value="'+esc(f.amt)+'">'+
      '<div class="qa">'+[10,50,100,500].map(function(n){return '<button data-act="qa" data-v="'+n+'">+'+n+'</button>';}).join('')+'<button data-act="qa" data-v="0">ล้าง</button></div>'+
      '<label>โน้ต (ไม่ใส่ก็ได้)</label><input id="fNote" class="inp" placeholder="เช่น ข้าวมันไก่" value="'+esc(f.note)+'">'+
      '<label>วันที่</label><input id="fDate" class="inp" type="date" value="'+f.date+'" max="'+today+'">'+
@@ -476,14 +692,35 @@ var A={
   settings:function(){
     openOv('<div class="sh"><h2 style="margin-top:0">⚙️ ตั้งค่า</h2><label>ชื่อเมือง</label><input id="sName" class="inp" value="'+esc(db.name)+'">'+
       '<label>งบรายจ่ายต่อเดือน (บาท)</label><input id="sBud" class="inp" inputmode="decimal" value="'+db.budget+'">'+
+      '<label>ชื่อของฉัน (ตามที่ขึ้นในสลิป)</label><input id="sMe" class="inp" placeholder="เช่น สมชาย ใจดี" value="'+esc(db.myName)+'"><div class="hint">ช่วยให้แยก เงินเข้า/เงินออก จากสลิปได้แม่นขึ้น</div>'+
+      (NATIVE?'<label>สแกนสลิปใหม่ในแกลเลอรีอัตโนมัติ</label><select id="sGal" class="inp"><option value="0"'+(db.galleryAuto?'':' selected')+'>ปิด</option><option value="1"'+(db.galleryAuto?' selected':'')+'>เปิด (ตอนเปิดแอป)</option></select><div class="hint">อ่านเฉพาะรูปใหม่ที่เป็นสลิป แล้วบันทึกให้เอง รูปไม่ถูกส่งออกจากเครื่อง</div>':'')+
       '<div class="row2" style="margin-top:12px"><button class="btn go" data-act="saveSet">✔ บันทึก</button><button class="btn" data-act="closeOv">ปิด</button></div>'+
       '<h2>สำรองข้อมูล</h2><div class="hint">ข้อมูลเก็บในเครื่องนี้ ควรสำรองไฟล์ไว้บ้าง</div>'+
       '<div class="row2" style="margin-top:8px"><button class="btn" data-act="export">💾 บันทึกไฟล์</button><label class="btn file" style="margin:0">📂 เปิดไฟล์<input type="file" id="imp" accept=".json,application/json"></label></div>'+
       '<button class="btn warn" data-act="reset" style="margin-top:14px">🗑️ ล้างข้อมูลทั้งหมด</button></div>');
     $('imp').onchange=importFile;
   },
-  saveSet:function(){db.name=$('sName').value.trim()||'เมืองของฉัน';db.budget=Math.max(0,num($('sBud').value));closeOv();toast('บันทึกแล้ว ✔');afterChange();},
+  saveSet:function(){
+    db.name=$('sName').value.trim()||'เมืองของฉัน';db.budget=Math.max(0,num($('sBud').value));db.myName=$('sMe').value.trim();
+    var g=$('sGal'),want=g&&g.value==='1';
+    closeOv();toast('บันทึกแล้ว ✔');afterChange();
+    if(NATIVE&&g){
+      if(want&&!db.galleryAuto){
+        Inbox.requestGalleryAccess().then(function(r){
+          if(r.granted){db.galleryAuto=true;db.lastGal=Math.floor(Date.now()/1000)-2*86400;save();toast('เปิดสแกนอัตโนมัติแล้ว ✔');autoScan();}
+          else toast('ต้องอนุญาตเข้าถึงรูปภาพก่อน');
+        });
+      }else if(!want){db.galleryAuto=false;save();}
+    }
+  },
   export:function(){
+    var fname='city-save-'+ymd(new Date())+'.json';
+    if(NATIVE&&Fs&&Sh){
+      Fs.writeFile({path:fname,data:JSON.stringify(db,null,1),directory:'CACHE',encoding:'utf8'})
+        .then(function(r){return Sh.share({title:'สำรองข้อมูลเมืองออมเงิน',url:r.uri});})
+        .catch(function(){});
+      return;
+    }
     var b=new Blob([JSON.stringify(db,null,1)],{type:'application/json'}),a=document.createElement('a');
     a.href=URL.createObjectURL(b);a.download='city-save-'+ymd(new Date())+'.json';document.body.appendChild(a);a.click();
     setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},1500);
@@ -510,21 +747,28 @@ document.addEventListener('click',function(ev){
   if(!el){ if(ev.target.id==='ov'&&ui.pending.length===0&&!ui.form)closeOv(); return; }
   var f=A[el.dataset.act];if(!f)return;ev.preventDefault();f(el.dataset.v);
 });
+document.addEventListener('change',function(ev){
+  var t=ev.target;
+  if(t.id==='scan'&&t.files&&t.files[0]){var file=t.files[0];t.value='';scanSlip(file);}
+  if(t.id==='multi'&&t.files&&t.files.length){var fl=Array.prototype.slice.call(t.files);t.value='';processBatch(fl.map(function(x){return Promise.resolve(x);}),'นำเข้า');}
+});
 document.addEventListener('input',function(ev){
   var t=ev.target,f=ui.form;if(!f)return;
   if(t.id==='fAmt')f.amt=t.value;else if(t.id==='fNote')f.note=t.value;else if(t.id==='fDate')f.date=t.value;
 });
 
 /* ================= เริ่มต้น ================= */
-if('serviceWorker' in navigator&&/^https?:/.test(location.protocol)){
-  window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});
-}
 (function(){ // เช็กสถานะตอนเปิดแอป (เช่น เปลี่ยนวัน / ได้เหรียญจากข้อมูลเดิม)
   db.lv=Math.max(db.lv,1);
   render();
   var got=checkBadges();got.forEach(function(b){ui.pending.push({k:'badge',b:b});});
   var nl=levelOf(db.xp);if(nl>db.lv){ui.pending.push({k:'level',from:db.lv,to:nl});db.lv=nl;}
   db.stage=stageOf(savings()).n;save();showPending();
+  if(NATIVE){
+    Inbox.addListener('sharedSlips',function(){autoScan();});
+    document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')autoScan();});
+    setTimeout(autoScan,600);
+  }
 })();
 })();
 </script>
