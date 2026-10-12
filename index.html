@@ -423,13 +423,123 @@ function render(){
   var imp=$('imp');if(imp)imp.onchange=importFile;
 }
 
+/* ================= อ่านสลิป (OCR) ================= */
+var OCR_SRC='https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+function loadOcr(){
+  if(window.Tesseract)return Promise.resolve();
+  return new Promise(function(res,rej){
+    var sc=document.createElement('script');sc.src=OCR_SRC;sc.onload=res;sc.onerror=function(){rej(new Error('load'));};document.head.appendChild(sc);
+  });
+}
+function prepImage(file){ // ย่อ/ขยาย + ขาวดำเพิ่มคอนทราสต์ ให้อ่านง่ายขึ้น
+  return new Promise(function(res,rej){
+    var url=URL.createObjectURL(file),img=new Image();
+    img.onload=function(){
+      var w=img.naturalWidth,h=img.naturalHeight,k=1800/Math.max(w,h);
+      if(w<1000)k=Math.max(k,1000/w);
+      k=Math.min(k,2.5);
+      var c=document.createElement('canvas');c.width=Math.round(w*k);c.height=Math.round(h*k);
+      var x=c.getContext('2d');x.drawImage(img,0,0,c.width,c.height);
+      try{
+        var d=x.getImageData(0,0,c.width,c.height),p=d.data;
+        for(var i=0;i<p.length;i+=4){var g=p[i]*.3+p[i+1]*.59+p[i+2]*.11;g=Math.max(0,Math.min(255,(g-128)*1.35+128));p[i]=p[i+1]=p[i+2]=g;}
+        x.putImageData(d,0,0);
+      }catch(e){}
+      URL.revokeObjectURL(url);res(c);
+    };
+    img.onerror=function(){URL.revokeObjectURL(url);rej(new Error('img'));};
+    img.src=url;
+  });
+}
+var MONTHS=[['มกราคม','ม.ค','jan'],['กุมภาพันธ์','ก.พ','feb'],['มีนาคม','มี.ค','mar'],['เมษายน','เม.ย','apr'],['พฤษภาคม','พ.ค','may'],['มิถุนายน','มิ.ย','jun'],
+  ['กรกฎาคม','ก.ค','jul'],['สิงหาคม','ส.ค','aug'],['กันยายน','ก.ย','sep'],['ตุลาคม','ต.ค','oct'],['พฤศจิกายน','พ.ย','nov'],['ธันวาคม','ธ.ค','dec']];
+function monthOf(tok){
+  tok=tok.toLowerCase().replace(/[\s.]/g,'');if(tok.length<2)return 0;
+  for(var i=0;i<12;i++){var m=MONTHS[i];
+    if(tok===m[0]||tok===m[1].replace(/\./g,'')||tok.indexOf(m[2])===0)return i+1;}
+  return 0;
+}
+function fixYear(y){ // รองรับ พ.ศ. 4 หลัก/2 หลัก และ ค.ศ.
+  if(y>=2400)return y-543;
+  if(y>=1000)return y;
+  var ce=2000+y,be=1957+y,cur=new Date().getFullYear();
+  return Math.abs(be-cur)<=Math.abs(ce-cur)?be:ce;
+}
+function mkDate(d,m,y){
+  y=fixYear(y);var dt=new Date(y,m-1,d);
+  if(dt.getFullYear()!==y||dt.getMonth()!==m-1||dt.getDate()!==d)return null;
+  var s=ymd(dt);return s>ymd(new Date())?null:s;
+}
+function parseSlip(raw){
+  var t=raw.replace(/([\u0E00-\u0E7F])[ \t]+(?=[\u0E00-\u0E7F])/g,'$1').replace(/[|]/g,' ');
+  var lines=t.split(/\n/).map(function(l){return l.trim();}).filter(Boolean),r={};
+  // จำนวนเงิน
+  var dec=/\d{1,3}(?:,\d{3})+\.\d{2}|\d+\.\d{2}/g,fee=/ค่าธรรมเนียม|ค่าบริการ|fee/i,key=/จำนวน|amount|ยอด|total|เงินโอน|เงินที่ได้รับ/i;
+  function nums(l){return (l.match(dec)||[]).map(num);}
+  var amt=0;
+  for(var i=0;i<lines.length&&!amt;i++){
+    if(key.test(lines[i])&&!fee.test(lines[i])){var n=nums(lines[i]).concat(nums(lines[i+1]||''));if(n.length)amt=n[0];}
+  }
+  if(!amt){
+    for(var j=0;j<lines.length&&!amt;j++){
+      var m=lines[j].match(/(\d[\d,]*(?:\.\d{1,2})?)\s*(?:บาท|THB|baht)/i);
+      if(m&&!fee.test(lines[j])&&num(m[1])>0)amt=num(m[1]);
+    }
+  }
+  if(!amt){lines.forEach(function(l){if(!fee.test(l))nums(l).forEach(function(n){if(n>amt)amt=n;});});}
+  if(amt>0)r.amt=amt;
+  // วันที่
+  var dm,ds=null;
+  var re1=/(\d{1,2})\s*([^\d\s]{2,12}?\.?)\s*(\d{2,4})/g;
+  while(!ds&&(dm=re1.exec(t))){var mo=monthOf(dm[2]);if(mo)ds=mkDate(+dm[1],mo,+dm[3]);}
+  if(!ds){var re2=/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/g;
+    while(!ds&&(dm=re2.exec(t)))ds=mkDate(+dm[1],+dm[2],+dm[3]);}
+  if(ds)r.date=ds;
+  // ประเภท
+  r.type=/รับเงิน|เงินเข้า|ได้รับเงิน|received|money in|เงินโอนเข้า/i.test(t)&&!/โอนเงินสำเร็จ|จ่ายเงินสำเร็จ/.test(t)?'income':'expense';
+  r.cat=r.type==='income'?'otherin':'otherout';
+  // โน้ต: ชื่อผู้รับ/ผู้โอน
+  var who=r.type==='income'?/^(?:จาก|ผู้โอน|from\b)\s*[:：]?\s*(.*)$/i:/^(?:ไปยัง|ถึง|ผู้รับ|to\b)\s*[:：]?\s*(.*)$/i;
+  for(var k=0;k<lines.length;k++){var w=lines[k].match(who);
+    if(w){var nm=(w[1]||lines[k+1]||'').replace(/[^\u0E00-\u0E7Fa-zA-Z0-9 .\-]/g,' ').replace(/\s+/g,' ').trim();if(nm.length>1){r.note=nm.slice(0,40);break;}}}
+  return r;
+}
+function scanSlip(file){
+  var f=ui.form;if(!f||!file)return;
+  function st(m){f.scanMsg=m;var e=$('scanSt');if(e&&ui.form===f)e.textContent=m;}
+  st('⏳ กำลังเตรียมรูป...');
+  loadOcr().then(function(){
+    st('⏳ กำลังโหลดตัวอ่านภาษาไทย (ครั้งแรกอาจนาน ต้องต่อเน็ต)...');
+    return prepImage(file);
+  }).then(function(cv){
+    return Tesseract.recognize(cv,'tha+eng',{logger:function(m){
+      if(m.status==='recognizing text')st('🔍 กำลังอ่านสลิป '+Math.round(m.progress*100)+'%');}});
+  }).then(function(res){
+    if(ui.form!==f)return;
+    var raw=(res.data&&res.data.text)||'',r=parseSlip(raw);
+    f.raw=raw.trim();
+    if(r.type){f.type=r.type;f.cat=r.cat;}
+    if(r.amt)f.amt=String(r.amt);
+    if(r.date)f.date=r.date;
+    if(r.note)f.note=r.note;
+    var miss=[];if(!r.amt)miss.push('จำนวนเงิน');if(!r.date)miss.push('วันที่');
+    f.scanMsg=miss.length?'⚠️ อ่านไม่เจอ: '+miss.join(', ')+' — กรอกเองได้เลย':'✔ อ่านสลิปแล้ว ตรวจสอบก่อนกดบันทึกนะ';
+    refreshForm();
+  }).catch(function(){
+    if(ui.form===f)st('❌ อ่านสลิปไม่ได้ (ต้องมีอินเทอร์เน็ตครั้งแรก) กรอกเองได้เลย');
+  });
+}
+
 /* ================= ฟอร์มเพิ่มรายการ ================= */
 function formHtml(){
   var f=ui.form,h='<div class="sh"><h2 style="margin-top:0">＋ เพิ่มรายการ</h2><div class="types">';
   ['income','expense','save'].forEach(function(t){h+='<button class="'+t+(f.type===t?' on':'')+'" data-act="ftype" data-v="'+t+'">'+({income:'⬆️ รายรับ',expense:'⬇️ รายจ่าย',save:'🐷 เงินออม'})[t]+'</button>';});
   h+='</div><div class="cats">';
   CATS[f.type].forEach(function(c){h+='<button class="'+(f.cat===c[0]?'on':'')+'" data-act="fcat" data-v="'+c[0]+'"><i>'+c[1]+'</i>'+c[2]+(c[3]?'<span class="tag">ฟุ่มเฟือย</span>':'')+'</button>';});
-  h+='</div><label>จำนวนเงิน (บาท)</label><input id="fAmt" class="inp amt" inputmode="decimal" placeholder="0" value="'+esc(f.amt)+'">'+
+  h+='</div><label class="btn sun file" style="margin:0 0 4px">📷 สแกนสลิปจากรูปภาพ<input type="file" id="scan" accept="image/*"></label>'+
+     '<div class="hint" id="scanSt">'+esc(f.scanMsg||'เลือกรูปสลิปโอนเงิน/รับเงิน แล้วแอปจะกรอกให้ (ตรวจสอบก่อนบันทึกด้วยนะ)')+'</div>'+
+     (f.raw?'<details class="hint"><summary>ข้อความที่อ่านได้</summary><pre style="white-space:pre-wrap;margin:4px 0">'+esc(f.raw)+'</pre></details>':'')+
+     '<label>จำนวนเงิน (บาท)</label><input id="fAmt" class="inp amt" inputmode="decimal" placeholder="0" value="'+esc(f.amt)+'">'+
      '<div class="qa">'+[10,50,100,500].map(function(n){return '<button data-act="qa" data-v="'+n+'">+'+n+'</button>';}).join('')+'<button data-act="qa" data-v="0">ล้าง</button></div>'+
      '<label>โน้ต (ไม่ใส่ก็ได้)</label><input id="fNote" class="inp" placeholder="เช่น ข้าวมันไก่" value="'+esc(f.note)+'">'+
      '<label>วันที่</label><input id="fDate" class="inp" type="date" value="'+f.date+'" max="'+today+'">'+
@@ -509,6 +619,10 @@ document.addEventListener('click',function(ev){
   var el=ev.target.closest('[data-act]');
   if(!el){ if(ev.target.id==='ov'&&ui.pending.length===0&&!ui.form)closeOv(); return; }
   var f=A[el.dataset.act];if(!f)return;ev.preventDefault();f(el.dataset.v);
+});
+document.addEventListener('change',function(ev){
+  var t=ev.target;
+  if(t.id==='scan'&&t.files&&t.files[0]){var file=t.files[0];t.value='';scanSlip(file);}
 });
 document.addEventListener('input',function(ev){
   var t=ev.target,f=ui.form;if(!f)return;
