@@ -3,7 +3,7 @@ name: Deploy Grocery App to GitHub Pages
 on:
   push:
     branches: [main]
-    paths: ['index.html', 'app.js', 'style.css', 'sw.js', 'manifest.webmanifest', 'icons/**', '.github/workflows/pages-grocery.yml']
+    paths-ignore: ['README.md']
   workflow_dispatch:
 
 permissions:

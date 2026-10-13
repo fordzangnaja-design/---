@@ -1,9 +1,0 @@
-{
-  "appId": "th.moneygamer.citysave",
-  "appName": "เมืองออมเงิน",
-  "webDir": "www",
-  "backgroundColor": "#e6f7ff",
-  "android": {
-    "allowMixedContent": false
-  }
-}

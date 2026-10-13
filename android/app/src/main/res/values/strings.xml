@@ -1,7 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<resources>
-    <string name="app_name">เมืองออมเงิน</string>
-    <string name="title_activity_main">เมืองออมเงิน</string>
-    <string name="package_name">th.moneygamer.citysave</string>
-    <string name="custom_url_scheme">th.moneygamer.citysave</string>
-</resources>
